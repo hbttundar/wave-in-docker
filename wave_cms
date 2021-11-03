@@ -1,0 +1,558 @@
+#!/usr/bin/env bash
+UNAMEOUT="$(uname -s)"
+
+# Regular Colors
+BLACK='\033[0;30m'  # Black
+RED='\033[0;31m'    # Red
+GREEN='\033[0;32m'  # Green
+YELLOW='\033[0;33m' # Yellow
+BLUE='\033[0;34m'   # Blue
+PURPLE='\033[0;35m' # Purple
+CYAN='\033[0;36m'   # Cyan
+WHITE='\033[0;37m'  # White
+NC='\033[0m'
+
+#define forground color plate
+declare -a CUSTOM_F_COLOR=()
+declare -a CUSTOM_B_COLOR=()
+function SET_COLORS()
+{
+    iter=16
+    while [ $iter -lt 52 ]
+    do
+        second=$[$iter+36]
+        third=$[$second+36]
+        four=$[$third+36]
+        five=$[$four+36]
+        six=$[$five+36]
+        seven=$[$six+36]
+        if [ $seven -gt 250 ];then seven=$[$seven-251]; fi
+        CUSTOM_F_COLOR[$iter]="\033[38;5;${iter}m"
+        CUSTOM_B_COLOR[$iter]="\033[48;5;${iter}m"
+        CUSTOM_F_COLOR[$second]="\033[38;5;${second}m"
+        CUSTOM_B_COLOR[$second]="\033[48;5;${second}m"
+        CUSTOM_F_COLOR[$third]="\033[38;5;${third}m"
+        CUSTOM_B_COLOR[$third]="\033[48;5;${third}m"
+        CUSTOM_F_COLOR[$four]="\033[38;5;${four}m"
+        CUSTOM_B_COLOR[$four]="\033[48;5;${four}m"
+        CUSTOM_F_COLOR[$five]="\033[38;5;${five}m"
+        CUSTOM_B_COLOR[$five]="\033[48;5;${five}m"
+        CUSTOM_F_COLOR[$six]="\033[38;5;${six}m"
+        CUSTOM_B_COLOR[$six]="\033[48;5;${six}m"
+        CUSTOM_F_COLOR[$seven]="\033[38;5;${seven}m"
+        CUSTOM_B_COLOR[$seven]="\033[48;5;${seven}m"
+        iter=$[$iter+1]
+    done
+}
+SET_COLORS
+
+function PRINT_COLORS( )
+{
+    iter=16
+
+    while [ $iter -lt 52 ]
+    do
+        second=$[$iter+36]
+        third=$[$second+36]
+        four=$[$third+36]
+        five=$[$four+36]
+        six=$[$five+36]
+        seven=$[$six+36]
+        if [ $seven -gt 250 ];then seven=$[$seven-251]; fi
+        echo -en "\033[38;5;$(echo $iter)m█ "
+        printf "%d" $iter
+        echo -en "   \033[38;5;$(echo $second)m█ "
+        printf "%d" $second
+        echo -en "   \033[38;5;$(echo $third)m█ "
+        printf "%d" $third
+        echo -en "   \033[38;5;$(echo $four)m█ "
+        printf "%d" $four
+        echo -en "   \033[38;5;$(echo $five)m█ "
+        printf "%d" $five
+        echo -en "   \033[38;5;$(echo $six)m█ "
+        printf "%d" $six
+        echo -en "   \033[38;5;$(echo $seven)m█ "
+        printf "%d" $seven
+        iter=$[$iter+1]
+        printf '\r\n'
+    done
+}
+# Verify operating system is supported...
+case "${UNAMEOUT}" in
+Linux*) MACHINE=linux ;;
+Darwin*) MACHINE=mac ;;
+*) MACHINE="UNKNOWN" ;;
+esac
+
+if [ "$MACHINE" == "UNKNOWN" ]; then
+  echo -e "${YELLOW}Unsupported operating system [$(uname -s)]. Laravel wave_cms supports macOS, Linux, and Windows (WSL2)." >&2
+  exit 1
+fi
+# Define environment variables...
+export APP_PORT="${APP_PORT:-80}"
+export APP_SERVICE="${APP_SERVICE:-"web"}"
+export COMPOSER_SERVICE="${APP_SERVICE:-"composer"}"
+export DB_PORT="${DB_PORT:-3306}"
+export WWWUSER="${WWWUSER:-$(id -u)}"
+export WWWGROUP="${WWWGROUP:-$(id -g)}"
+
+export wave_cms_SHARE_DASHBOARD="${wave_cms_SHARE_DASHBOARD:-4040}"
+export wave_cms_SHARE_SERVER_HOST="${wave_cms_SHARE_SERVER_HOST:-"laravel-wave_cms.site"}"
+export wave_cms_SHARE_SERVER_PORT="${wave_cms_SHARE_SERVER_PORT:-8080}"
+CURRENT_DIR=$(pwd)
+wave_cms=/usr/bin/wave_cms
+ARTISAN=/usr/bin/artisan
+VENDOR_ROOT="${CURRENT_DIR}"/vendor/
+NODE_ROOT="${CURRENT_DIR}"/node_modules/
+BOOTSTRAP="${CURRENT_DIR}"/bootstrap/
+STORAGE="${CURRENT_DIR}"/storage/
+docker info >/dev/null 2>&1
+if ! docker info >/dev/null 2>&1; then
+  echo -e "${WHITE}Docker is not running.${NC}" >&2
+
+  exit 1
+fi
+COMPOSE="docker-compose"
+# Determine if docker is currently up and we have some container run currently...
+
+PSRESULT="$(docker-compose ps -q)"
+if [ -n "$PSRESULT" ]; then
+  EXEC="yes"
+else
+  EXEC="no"
+fi
+
+# Function that outputs wave_cms is not running...
+function wave_cms_is_not_running() {
+  echo -e "${WHITE}wave_cms is not running.${NC}" >&2
+  echo "" >&2
+  echo -e "${WHITE}You may wave_cms using the following commands:${NC} './wave_cms up|wave_cms up' or './wave_cms up -d|wave_cms up -d'" >&2
+
+  exit 1
+}
+
+if [ $# -gt 0 ]; then
+  # Source the ".env" file so Laravel's environment variables are available...
+  if [ -f ./.env ]; then
+    source ./.env
+  fi
+  if [ "$1" == "initialize" ] || [ "$1" == "-init" ]; then
+    shift 1
+    echo -e "${RED} start delete old wave_cms,artisan files from /usr/local/bin directory ${NC}\r\n"
+    sudo rm -rf ${wave_cms} && sudo rm -rf ${ARTISAN} || exit
+
+    sudo ln -s "${CURRENT_DIR}/wave_cms" /usr/local/bin/wave_cms
+    echo -e "${GREEN} wave_cms add to /usr/bin directory successfully ${NC}"
+
+    sudo ln -s "${CURRENT_DIR}/artisan" /usr/local/bin/artisan
+    echo -e "${GREEN} artisan add to /usr/bin directory successfully ${NC}\r\n"
+    sudo chmod +x artisan
+
+    echo -e "${BLUE} start to set vendor directory permission${NC}"
+    sudo chown -R "${WWWUSER}":"${WWWGROUP}" "${VENDOR_ROOT}" && sudo chmod -R 777 "${VENDOR_ROOT}"
+    echo -e "${BLUE} permission set for composer directory ${NC}\r\n"
+
+    echo -e "${CYAN} start to set node_modules directory permission${NC}"
+    sudo chown -R "${WWWUSER}":"${WWWGROUP}" "${NODE_ROOT}" && sudo chmod -R 777 "${NODE_ROOT}"
+    echo -e "${GREEN} permission set for node_modules directory ${NC}\r\n"
+
+    echo -e "${BLUE} start to set bootstrap directory permission${NC}"
+    sudo chmod -R 777 "${BOOTSTRAP}"
+    echo -e "${BLUE} permission set for bootstrap directory ${NC}\r\n"
+
+    echo -e "${CYAN} start to set storage directory permission${NC}"
+    sudo chmod -R 777 "${STORAGE}"
+    echo -e "${GREEN} permission set for node_modules directory ${NC}\r\n"
+
+  elif [ "$1" == "help" ] || [ "$1" == "-h" ]; then
+    shift 1
+    echo -e "${CUSTOM_F_COLOR[4]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_F_COLOR[4]} |${CUSTOM_F_COLOR[26]}                                   you have these commands for execute                                               ${CUSTOM_F_COLOR[4]}|${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[0]}${CUSTOM_F_COLOR[202]}    help | -h:                                                                                                          ${NC}"
+    echo -e "${CUSTOM_B_COLOR[0]}${CUSTOM_F_COLOR[172]}          this commmand show help of wave_cms command                                                                      ${NC}"
+    echo -e "${CUSTOM_B_COLOR[0]}${CUSTOM_F_COLOR[196]}             sample : wave_cms  help                                                                                       ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[0]}${CUSTOM_F_COLOR[202]}    print-colors | -prc:                                                                                                ${NC}"
+    echo -e "${CUSTOM_B_COLOR[0]}${CUSTOM_F_COLOR[172]}          this commmand print color palete to help you when you wanna chose color for                                   ${NC}"
+    echo -e "${CUSTOM_B_COLOR[0]}${CUSTOM_F_COLOR[196]}             sample : wave_cms  -prc                                                                                       ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[184]}    docker-restart | -dr:                                                                                               ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[202]}       with this command other project that run with docker and bind required ports will stop,and then you can run wave_cms${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[88]}          sample : wave_cms docker-restart | wave_cms -dr                                                                     ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[104]}   up:                                                                                                                  ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[140]}      wave_cms up use for running docker-compose up commands                                                               ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[160]}         sample : wave_cms up                                                                                              ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[32]}    down:                                                                                                               ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[68]}        wave_cms down use for running docker-compose down commands                                                         ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[160]}           sample : wave_cms down                                                                                          ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[104]}    php:                                                                                                                ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[140]}        wave_cms php use for proxy php commands to your web container service                                              ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[160]}            sample : wave_cms php -v                                                                                       ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[104]}    bin:                                                                                                                ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[140]}        wave_cms bin use for proxy vendor binary commands on the web container                                             ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[160]}            sample : wave_cms bin carbon                                                                                   ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[32]}    composer:                                                                                                           ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[68]}        wave_cms composer use for proxy composer commands to your web container service                                    ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[160]}           sample : wave_cms composer -v                                                                                   ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[104]}    artisan:                                                                                                            ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[140]}          wave_cms artisan use for proxy artisan commands to your web container service                                    ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[160]}            sample : wave_cms artisan cache:clear                                                                          ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[104]}    test:                                                                                                               ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[140]}          wave_cms test use for proxy artisan test to your web container service                                           ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[160]}            sample : wave_cms test --testsuite=Feature --stop-on-failure                                                   ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[32]}    dusk:                                                                                                               ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[68]}         wave_cms dusk use for proxy artisan dusk commands to your web container service                                   ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[160]}           sample : wave_cms artisan dusk dusk:chrome-driver                                                               ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[104]}    dusk:fails :                                                                                                        ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[140]}          wave_cms dusk:fails use for proxy artisan dusk:fails commands to your web container service                      ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[160]}            sample : wave_cms artisan dusk:fails                                                                           ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[104]}    tinker:                                                                                                             ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[140]}          wave_cms tinker use for proxy artisan tinker commands to your web container service                              ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[160]}              sample : wave_cms artisan tinker                                                                             ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[32]}   app-console|a-console:                                                                                               ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[68]}         wave_cms app-console|a-console use for proxy php Interactive mode enabled to your web container service           ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[160]}             sample : wave_cms app-console                                                                                 ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[104]}    node:                                                                                                               ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[140]}          wave_cms node use for proxy node command to your node container service                                          ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[160]}              sample: wave_cms node install                                                                                ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[104]}   npm:                                                                                                                 ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[140]}         wave_cms npm use for proxy npm command to your node container service                                             ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[160]}             sample: wave_cms npm install                                                                                  ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[32]}     npx:                                                                                                               ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[68]}           wave_cms npx use for Proxy NPX commands to the 'npx' binary on the web container                                ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[160]}              sample: wave_cms npx                                                                                         ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[104]}    yarn:                                                                                                               ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[140]}          wave_cms yarn use for proxy node yarn command to your node container service                                     ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[160]}              sample: wave_cms yarn test                                                                                   ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[104]}    mysql:                                                                                                              ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[140]}          wave_cms mysql use for initiate a mysql CLI terminal session within the 'mysql' container                        ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[160]}              sample: wave_cms mysql                                                                                       ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[32]}    mariadb:                                                                                                            ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[68]}          wave_cms mariadb use for initiate a MYSQL CLI terminal session within the 'mariadb' container                    ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[160]}             sample: wave_cms mariadb                                                                                      ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[104]}    psql:                                                                                                               ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[140]}          wave_cms psql use for initiate a PostgreSQL CLI terminal session within the 'pgsql' container                    ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[160]}              sample: wave_cms psql                                                                                        ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[104]}    shell:                                                                                                              ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[140]}          wave_cms shell use for initiate a bash shell within the web container                                            ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[160]}              sample : wave_cms shell                                                                                      ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[32]}    root-shell:                                                                                                         ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[68]}          wave_cms shell use for initiate a root user bash shell within the web container                                  ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[160]}             sample : wave_cms shell                                                                                       ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[104]}    redis:                                                                                                              ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[140]}          wave_cms redis use for Initiate a Redis CLI terminal session within the 'redis' container                        ${NC}"
+    echo -e "${CUSTOM_B_COLOR[16]}${CUSTOM_F_COLOR[160]}              sample : wave_cms redis                                                                                      ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[104]}    share:                                                                                                              ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[140]}           wave_cms share use for Share the site                                                                           ${NC}"
+    echo -e "${CUSTOM_B_COLOR[233]}${CUSTOM_F_COLOR[160]}              sample : wave_cms share                                                                                      ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[32]}   all other docker-compose commands:                                                                                   ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[68]}         Pass unknown commands to the 'docker-compose' binary                                                           ${NC}"
+    echo -e "${CUSTOM_B_COLOR[232]}${CUSTOM_F_COLOR[160]}             sample : wave_cms  logs web                                                                                   ${NC}"
+    echo -e "${CUSTOM_F_COLOR[180]} -----------------------------------------------------------------------------------------------------------------------${NC}"
+  # print color palete
+  elif [ "$1" == "print-colors" ]|| [ "$1" == "-prc" ]; then
+    shift 1
+    PRINT_COLORS
+  # stop old docker services
+  elif [ "$1" == "docker-restart" ] || [ "$1" == "-dr" ]; then
+    shift 1
+    if [ "$MACHINE" == "linux" ]; then
+      echo -e "${CUSTOM_B_COLOR[7]}${CUSTOM_F_COLOR[0]} your machin is linux or windows with wls linux${NC}"
+      NGINXRUNNING=$(systemctl is-active nginx)
+      APACHERUNNING=$(systemctl is-active apache2)
+      MYSQLRUNNING=$(systemctl is-active mysql)
+      if [ $APACHERUNNING = "active" ]; then
+        echo -e "${CYAN}Apache is running, stopping it${NC}"
+        sudo service apache2 stop
+        echo -e "${YELLOW}Stopping Apache2${NC}"
+      fi
+      if [ $NGINXRUNNING = "active" ]; then
+        echo -e "${PURPLE}nginx is running, stopping it${NC}"
+        sudo service nginx stop
+        echo "${YELLOW}Stopping Nginx${NC}"
+      fi
+      if [ $MYSQLRUNNING = "active" ]; then
+        echo -e "${BLACK}MySql is running, stopping it${NC}"
+        sudo service mysql stop
+        echo -e "${YELLOW}Stopping MySql${NC}"
+      fi
+    fi
+    if [ "$MACHINE" == "mac" ]; then
+      NGINXRUNNING=$(ps aux | grep -v grep | grep -c -i ^nginx$)
+      APACHERUNNING=$(ps aux | grep -v grep | grep -c -i ^httpd$)
+      MYSQLRUNNING=$(ps aux | grep -v grep | grep -c -i ^mysql$)
+      if [ $APACHERUNNING != 0 ]; then
+        echo -e "${CYAN}Apache is running, stopping it${NC}"
+        brew services stop httpd
+        echo -e "${YELLOW}Stopping Apache2${NC}"
+      fi
+      if [ $NGINXRUNNING != 0 ]; then
+        echo -e "${PURPLE}nginx is running, stopping it${NC}"
+        brew services stop nginx
+        echo "${YELLOW}Stopping Nginx${NC}"
+      fi
+      if [ $MYSQLRUNNING != 0 ]; then
+        echo -e "${BLACK}MySql is running, stopping it${NC}"
+        brew services stop mysql
+        echo -e "${YELLOW}Stopping MySql${NC}"
+      fi
+    fi
+    echo -e "${CUSTOM_F_COLOR[87]}Stopping Dockers...${NC}"
+    docker stop $(docker ps -a -q)
+    echo -e "Docker ${CUSTOM_F_COLOR[200]}Stopped${NC}"
+    echo -e "${CUSTOM_F_COLOR[26]}Stopping Docker-compose...${NC}"
+    docker-compose stop
+    echo -e "Docker-compose ${CUSTOM_F_COLOR[99]}Stopped${NC}"
+    echo -e "${CUSTOM_F_COLOR[161]}running projects using docker or docker-compose stopped ,${CUSTOM_F_COLOR[196]}now you can start wave_cms...${NC}"
+  # Proxy PHP commands to the "php" binary on the application container...
+  elif [ "$1" == "php" ]; then
+    shift 1
+
+    if [ "$EXEC" == "yes" ]; then
+      # shellcheck disable=SC2124
+      EXEC_CMD="cd /var/www/html && php $@"
+      $COMPOSE exec -u wave_cms "$APP_SERVICE" bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Proxy vendor binary commands on the application container...
+  elif [ "$1" == "bin" ]; then
+    shift 1
+
+    if [ "$EXEC" == "yes" ]; then
+      # shellcheck disable=SC2124
+      EXEC_CMD="$@"
+      $COMPOSE exec -u wave_cms "$APP_SERVICE" bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Proxy Composer commands to the "composer" binary on the application container...
+  elif [ "$1" == "composer" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      EXEC_CMD="composer $@"
+      $COMPOSE exec -u wave_cms "$APP_SERVICE" bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Proxy Artisan commands to the "artisan" binary on the application container...
+  elif [ "$1" == "artisan" ] || [ "$1" == "art" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      EXEC_CMD="php artisan $@"
+      $COMPOSE exec -u wave_cms "$APP_SERVICE" bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Proxy the "test" command to the "php artisan test" Artisan command...
+  elif [ "$1" == "test" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      EXEC_CMD="php artisan test "$@""
+      $COMPOSE exec "$APP_SERVICE" bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Proxy the "dusk" command to the "php artisan dusk" Artisan command...
+  elif [ "$1" == "dusk" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      EXEC_CMD="php artisan dusk $@"
+      $COMPOSE exec \
+        -u wave_cms \
+        -e "APP_URL=http://web" \
+        -e "DUSK_DRIVER_URL=http://selenium:4444/wd/hub" \
+        "$APP_SERVICE" bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Proxy the "dusk:fails" command to the "php artisan dusk:fails" Artisan command...
+  elif [ "$1" == "dusk:fails" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      EXEC_CMD="php artisan dusk:fails $@"
+      $COMPOSE exec \
+        -u wave_cms \
+        -e "APP_URL=http://web" \
+        -e "DUSK_DRIVER_URL=http://selenium:4444/wd/hub" \
+        "$APP_SERVICE" \
+        bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Initiate a Laravel Tinker session within the application container...
+  elif [ "$1" == "tinker" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      EXEC_CMD="php artisan tinker $@"
+      $COMPOSE exec -u wave_cms "$APP_SERVICE" bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+  # Initiate a app console for php in application container...
+  elif [ "$1" == "app-console" ] || [ "$1" == "a-console" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      EXEC_CMD="php -a $@"
+      $COMPOSE exec -u wave_cms web bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+  # Proxy Node commands to the "node" binary on the application container...
+  elif [ "$1" == "node" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      EXEC_CMD="node $@"
+      $COMPOSE exec -u wave_cms "$APP_SERVICE" bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Proxy NPM commands to the "npm" binary on the application container...
+  elif [ "$1" == "npm" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      EXEC_CMD="npm $@"
+      $COMPOSE exec -u wave_cms "$APP_SERVICE" bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Proxy NPX commands to the "npx" binary on the application container...
+  elif [ "$1" == "npx" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      EXEC_CMD="npx "$@""
+      $COMPOSE exec -u wave_cms "$APP_SERVICE" bach -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Proxy YARN commands to the "yarn" binary on the application container...
+  elif [ "$1" == "yarn" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      EXEC_CMD="yarn $@"
+      $COMPOSE exec -u wave_cms "$APP_SERVICE" bash -c "$EXEC_CMD"
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Initiate a MySQL CLI terminal session within the "mysql" container...
+  elif [ "$1" == "mysql" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      docker-compose exec \
+        mysql \
+        bash -c 'MYSQL_PWD=${MYSQL_PASSWORD} mysql -u ${MYSQL_USER} ${MYSQL_DATABASE}'
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Initiate a MySQL CLI terminal session within the "mariadb" container...
+  elif [ "$1" == "mariadb" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      docker-compose exec \
+        mariadb \
+        bash -c 'MYSQL_PWD=${MYSQL_PASSWORD} mysql -u ${MYSQL_USER} ${MYSQL_DATABASE}'
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Initiate a PostgreSQL CLI terminal session within the "pgsql" container...
+  elif [ "$1" == "psql" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      docker-compose exec \
+        pgsql \
+        bash -c 'PGPASSWORD=${PGPASSWORD} psql -U ${POSTGRES_USER} ${POSTGRES_DB}'
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Initiate a Bash shell within the application container...
+  elif [ "$1" == "shell" ] || [ "$1" == "bash" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      docker-compose exec \
+        -u wave_cms \
+        "$APP_SERVICE" \
+        bash
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Initiate a root user Bash shell within the application container...
+  elif [ "$1" == "root-shell" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      docker-compose exec \
+        "$APP_SERVICE" \
+        bash
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Initiate a Redis CLI terminal session within the "redis" container...
+  elif [ "$1" == "redis" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      docker-compose exec \
+        redis \
+        redis-cli
+    else
+      wave_cms_is_not_running
+    fi
+
+  # Share the site...
+  elif [ "$1" == "share" ]; then
+    shift 1
+    if [ "$EXEC" == "yes" ]; then
+      docker run --init --rm -p "$wave_cms_SHARE_DASHBOARD":4040 -t beyondcodegmbh/expose-server:latest share http://host.docker.internal:"$APP_PORT" \
+        --server-host="$wave_cms_SHARE_SERVER_HOST" \
+        --server-port="$wave_cms_SHARE_SERVER_PORT" \
+        --auth="$wave_cms_SHARE_TOKEN" \
+        --subdomain=""
+      "$@"
+    else
+      wave_cms_is_not_running
+    fi
+  # Pass unknown commands to the "docker-compose" binary...
+  else
+    docker-compose "$@"
+  fi
+else
+  docker-compose ps
+fi
