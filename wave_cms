@@ -141,10 +141,10 @@ if [ $# -gt 0 ]; then
     echo -e "${RED} start delete old wave_cms,artisan files from /usr/local/bin directory ${NC}\r\n"
     sudo rm -rf ${wave_cms} && sudo rm -rf ${ARTISAN} || exit
 
-    sudo ln -s "${CURRENT_DIR}/wave_cms" /usr/local/bin/wave_cms
+    sudo ln -sfT "${CURRENT_DIR}/wave_cms" /usr/local/bin/wave_cms
     echo -e "${GREEN} wave_cms add to /usr/bin directory successfully ${NC}"
 
-    sudo ln -s "${CURRENT_DIR}/artisan" /usr/local/bin/artisan
+    sudo ln -sfT "${CURRENT_DIR}/artisan" /usr/local/bin/artisan
     echo -e "${GREEN} artisan add to /usr/bin directory successfully ${NC}\r\n"
     sudo chmod +x artisan
 
